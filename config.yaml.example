@@ -1,0 +1,33 @@
+# GitLab Pipeline to Confluence - Configuration Template
+#
+# Copy this file to config.yaml and update with your values
+# Configuration priority (highest to lowest):
+#   1. Command line arguments
+#   2. Config file
+#   3. Environment variables
+#   4. Default values
+
+gitlab:
+  # GitLab instance URL
+  url: https://gitlab.example.com
+
+  # GitLab private token (needs read_api scope)
+  # Generate at: GitLab > User Settings > Access Tokens
+  token: changeme
+
+
+confluence:
+  # Confluence instance URL
+  url: https://confluence.example.com
+
+  # Confluence account email
+  email: changeme
+
+  # Confluence API token
+  # Generate at: Atlassian account > Security > API tokens
+  token: changeme
+
+
+options:
+  # Number of recent pipelines to show in history chart
+  history_count: 10
