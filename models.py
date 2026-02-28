@@ -1,7 +1,8 @@
 """Data models and parsers for GitLab pipeline and test data."""
 
+import re
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ class PipelineTestCounts:
     skipped_count: int = 0
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass(frozen=True)
 class PipelineHistory:
     """Historical information about a past pipeline run."""
@@ -74,6 +76,8 @@ class PipelineHistory:
     id: int
     status: str
     ref: str
+    version: str = 'N/A'
+    url: str = ''
     created_at: Optional[str] = None
     duration: Optional[int] = None
     web_url: Optional[str] = None
@@ -162,6 +166,8 @@ def parse_pipelines(pipelines: List[dict]) -> List[PipelineHistory]:
             id=p.get("id", 0),
             status=p.get("status", ""),
             ref=p.get("ref", ""),
+            version='N/A',
+            url='',
             created_at=p.get("created_at"),
             duration=p.get("duration"),
             web_url=p.get("web_url"),
@@ -186,6 +192,8 @@ def add_test_summary_to_pipeline(
         id=pipeline.id,
         status=pipeline.status,
         ref=pipeline.ref,
+        version=pipeline.version,
+        url=pipeline.url,
         created_at=pipeline.created_at,
         duration=pipeline.duration,
         web_url=pipeline.web_url,
@@ -196,3 +204,57 @@ def add_test_summary_to_pipeline(
             skipped_count=test_summary.skipped_count,
         ),
     )
+
+
+def add_version_and_url_to_pipeline(
+    pipeline: PipelineHistory, version: str, url: str
+) -> PipelineHistory:
+    """Create a new PipelineHistory with version and URL.
+
+    Args:
+        pipeline: Existing PipelineHistory object
+        version: Version string (e.g., 'v1.2.3')
+        url: URL to the pipeline
+
+    Returns:
+        New PipelineHistory instance with version and URL added
+    """
+    return PipelineHistory(
+        id=pipeline.id,
+        status=pipeline.status,
+        ref=pipeline.ref,
+        version=version,
+        url=url,
+        created_at=pipeline.created_at,
+        duration=pipeline.duration,
+        web_url=pipeline.web_url,
+        test_counts=pipeline.test_counts,
+    )
+
+
+def parse_ref_with_regex(ref: str, regex_pattern: str) -> Tuple[str, str, bool]:
+    """Parse pipeline ref using regex to extract name and version.
+
+    Args:
+        ref: Pipeline ref (e.g., 'my-app-v1.2.3')
+        regex_pattern: Regex with 'name' group, optionally 'version' group
+
+    Returns:
+        Tuple of (name, version, matched) - matched is False if regex didn't match
+
+    Raises:
+        ValueError: If regex doesn't contain 'name' named group
+    """
+    compiled = re.compile(regex_pattern)
+    if 'name' not in compiled.groupindex:
+        raise ValueError("Regex must contain 'name' named group")
+
+    match = compiled.match(ref)
+    if not match:
+        return ('', 'N/A', False)
+
+    name = match.group('name')
+    has_version = 'version' in compiled.groupindex
+    version_match = match.group('version') if has_version and match.group('version') else 'N/A'
+
+    return (name, version_match, True)

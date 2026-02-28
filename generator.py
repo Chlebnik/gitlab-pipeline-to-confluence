@@ -52,11 +52,14 @@ def generate_ascii_bar_chart(
     lines = []
     for d in data:
         status = d.status
+        version = d.version
+        url = d.url
         val = get_value(d)
         bar_length = int((val / max_val) * 20)
         bar_str = "█" * bar_length + " " * (20 - bar_length)
         status_icon = "✓" if status == "success" else "✗" if status == "failed" else "○"
-        lines.append(f"{status_icon} {status:10} |{bar_str}| {val}")
+        url_html = f'<a href="{url}">{d.id}</a>' if url else ''
+        lines.append(f"{version} {status_icon} {status:10} |{bar_str}| {val} {url_html}")
 
     return "\n".join(lines)
 
@@ -103,6 +106,7 @@ def format_timestamp(ts: Optional[str]) -> str:
 
 def generate_pipeline_section(
     pipeline_name: str,
+    version: str,
     pipeline_info: PipelineInfo,
     test_summary: TestSummary,
     recent_pipelines: List[PipelineHistory],
@@ -114,6 +118,7 @@ def generate_pipeline_section(
 
     Args:
         pipeline_name: Name of the pipeline (used as section header)
+        version: Version string (e.g., 'v1.2.3')
         pipeline_info: Current pipeline information
         test_summary: Test results summary
         recent_pipelines: List of recent pipeline runs for history chart
@@ -126,10 +131,9 @@ def generate_pipeline_section(
     return f"""<h2>{pipeline_name}</h2>
 
 <p>
-    <strong>Latest Pipeline Run:</strong>
-    <a href="{pipeline_info.web_url}">{pipeline_info.id}</a> |
-    Status: {pipeline_info.status} |
-    Duration: {format_duration(pipeline_info.duration)}
+    <strong>{version} - Status:</strong> {pipeline_info.status} |
+    Duration: {format_duration(pipeline_info.duration)} |
+    <a href="{pipeline_info.web_url}">Pipeline #{pipeline_info.id}</a>
 </p>
 
 <h3>Test Results</h3>

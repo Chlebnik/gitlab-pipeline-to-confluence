@@ -25,8 +25,10 @@ from models import (
     PipelineInfo,
     TestSummary,
     add_test_summary_to_pipeline,
+    add_version_and_url_to_pipeline,
     parse_pipeline_info,
     parse_pipelines,
+    parse_ref_with_regex,
     parse_test_summary,
 )
 
@@ -65,7 +67,7 @@ def save_default_config(output_path: str) -> None:
     print("Please update the values in the config file before running the script.")
 
 
-# pylint: disable=too-many-locals,too-many-statements
+# pylint: disable=too-many-locals,too-many-statements,too-many-branches
 def main():
     """Main function to fetch GitLab pipeline data and update Confluence page.
 
@@ -144,6 +146,14 @@ Examples:
         help="Confluence API token (default: from config or env)",
     )
     arg_parser.add_argument(
+        "--regex",
+        default="^(?P<name>[^ ]+) - (?P<version>.*)$",
+        help="Regex pattern to extract name and version from pipeline ref. "
+             "Must contain 'name' group, optionally 'version' group. "
+             "Example: '^(?P<name>[^ ]+) - (?P<version>.*)$' (default: "
+             "'^(?P<name>[^ ]+) - (?P<version>.*)$')",
+    )
+    arg_parser.add_argument(
         "--history-count",
         type=int,
         help="Number of recent pipelines to show in history (default: from config or 10)",
@@ -199,9 +209,20 @@ Examples:
 
     pipeline = gitlab.get_pipeline(args.project_id, args.pipeline_id)
     pipeline_info: PipelineInfo = parse_pipeline_info(pipeline)
-    pipeline_name = pipeline_info.name
 
-    print(f"Pipeline name: {pipeline_name}")
+    # Parse ref using regex to extract name and version
+    pipeline_ref = pipeline.get("ref", "")
+    name, version, matched = parse_ref_with_regex(pipeline_ref, args.regex)
+    if not matched:
+        print(
+            f"Error: Pipeline ref '{pipeline_ref}' does not match regex '{args.regex}'. "
+            f"Expected regex to contain 'name' group and match the ref.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"Pipeline name: {name}")
+    print(f"Pipeline version: {version}")
     print(f"Status: {pipeline_info.status}")
 
     try:
@@ -220,28 +241,45 @@ Examples:
 
     print(f"Fetching recent {history_count} pipelines for history...")
     pipelines_data = gitlab.get_pipelines(
-        args.project_id, per_page=history_count
+        args.project_id, per_page=history_count * 2  # Fetch more to filter
     )
-    recent_pipelines: list[PipelineHistory] = parse_pipelines(pipelines_data)
 
-    print("Fetching test counts for historical pipelines...")
+    # Filter pipelines that match the same name pattern
+    filtered_pipelines = []
+    for p in pipelines_data:
+        p_ref = p.get("ref", "")
+        p_name, p_version, p_matched = parse_ref_with_regex(p_ref, args.regex)
+        if p_matched and p_name == name:
+            filtered_pipelines.append(p)
+
+    recent_pipelines: list[PipelineHistory] = parse_pipelines(filtered_pipelines)
+
+    print("Fetching test counts and versions for historical pipelines...")
     enriched_pipelines = []
     for pipeline in recent_pipelines:
+        # Parse version from ref
+        p_ref = pipeline.ref
+        p_name, p_version, _ = parse_ref_with_regex(p_ref, args.regex)
+        p_url = pipeline.web_url or ''
+
         try:
             test_report = gitlab.get_pipeline_test_report_summary(
                 args.project_id, pipeline.id
             )
             test_summary = parse_test_summary(test_report)
+            pipeline_with_tests = add_test_summary_to_pipeline(pipeline, test_summary)
             enriched_pipelines.append(
-                add_test_summary_to_pipeline(pipeline, test_summary)
+                add_version_and_url_to_pipeline(pipeline_with_tests, p_version, p_url)
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             print(f"Warning: Could not fetch test summary for pipeline {pipeline.id}: {exc}")
-            enriched_pipelines.append(pipeline)
+            enriched_pipelines.append(
+                add_version_and_url_to_pipeline(pipeline, p_version, p_url)
+            )
     recent_pipelines = enriched_pipelines
 
     section_content = generate_pipeline_section(
-        pipeline_name, pipeline_info, test_summary, recent_pipelines
+        name, version, pipeline_info, test_summary, recent_pipelines
     )
 
     print(f"Fetching Confluence page {args.confluence_page_id}...")
@@ -251,11 +289,11 @@ Examples:
     page_title = page["title"]
 
     new_content = find_and_replace_section(
-        current_content, pipeline_name, section_content
+        current_content, name, section_content
     )
 
     if new_content == current_content:
-        print(f"Warning: Section for '{pipeline_name}' not found in page. Appending...")
+        print(f"Warning: Section for '{name}' not found in page. Appending...")
         new_content = current_content + section_content
 
     print("Updating Confluence page...")

@@ -183,14 +183,14 @@ class TestGeneratePipelineSection:
         )
         recent_pipelines = [
             PipelineHistory(
-                id=i, status="success", ref="main",
+                id=i, status="success", ref="main", version='v1.0.0', url=f'https://gitlab.com/pipelines/{i}',
                 test_counts=PipelineTestCounts(total_count=100 - i * 10)
             )
             for i in range(5)
         ]
 
         result = generate_pipeline_section(
-            "test-pipeline", pipeline_info, test_summary, recent_pipelines
+            "test-pipeline", "v1.0.0", pipeline_info, test_summary, recent_pipelines
         )
 
         assert "<h2>test-pipeline</h2>" in result
