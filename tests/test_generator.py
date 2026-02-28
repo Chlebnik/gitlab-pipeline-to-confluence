@@ -10,7 +10,7 @@ from generator import (
     generate_pipeline_section,
     generate_status_badge,
 )
-from models import PipelineHistory, PipelineInfo, TestSummary
+from models import PipelineHistory, PipelineInfo, PipelineTestCounts, TestSummary
 
 
 class TestGenerateStatusBadge:
@@ -48,7 +48,8 @@ class TestGenerateAsciiBarChart:
         """Test bar chart with single pipeline."""
         pipelines = [
             PipelineHistory(
-                id=1, status="success", ref="main", total_count=100
+                id=1, status="success", ref="main",
+                test_counts=PipelineTestCounts(total_count=100)
             )
         ]
 
@@ -60,7 +61,10 @@ class TestGenerateAsciiBarChart:
     def test_generate_ascii_bar_chart_multiple(self):
         """Test bar chart with multiple pipelines."""
         pipelines = [
-            PipelineHistory(id=i, status="success", ref="main", total_count=100 - i * 10)
+            PipelineHistory(
+                id=i, status="success", ref="main",
+                test_counts=PipelineTestCounts(total_count=100 - i * 10)
+            )
             for i in range(5)
         ]
 
@@ -72,8 +76,14 @@ class TestGenerateAsciiBarChart:
     def test_generate_ascii_bar_chart_with_failed_status(self):
         """Test bar chart with failed pipelines."""
         pipelines = [
-            PipelineHistory(id=1, status="failed", ref="main", total_count=50),
-            PipelineHistory(id=2, status="success", ref="main", total_count=100),
+            PipelineHistory(
+                id=1, status="failed", ref="main",
+                test_counts=PipelineTestCounts(total_count=50)
+            ),
+            PipelineHistory(
+                id=2, status="success", ref="main",
+                test_counts=PipelineTestCounts(total_count=100)
+            ),
         ]
 
         result = generate_ascii_bar_chart(pipelines)
@@ -172,7 +182,10 @@ class TestGeneratePipelineSection:
             total_time=300,
         )
         recent_pipelines = [
-            PipelineHistory(id=i, status="success", ref="main", total_count=100 - i * 10)
+            PipelineHistory(
+                id=i, status="success", ref="main",
+                test_counts=PipelineTestCounts(total_count=100 - i * 10)
+            )
             for i in range(5)
         ]
 

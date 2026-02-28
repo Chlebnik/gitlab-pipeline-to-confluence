@@ -58,6 +58,16 @@ class TestSummary:
 
 
 @dataclass(frozen=True)
+class PipelineTestCounts:
+    """Test count results for a pipeline run."""
+
+    total_count: int = 0
+    success_count: int = 0
+    failed_count: int = 0
+    skipped_count: int = 0
+
+
+@dataclass(frozen=True)
 class PipelineHistory:
     """Historical information about a past pipeline run."""
 
@@ -67,7 +77,31 @@ class PipelineHistory:
     created_at: Optional[str] = None
     duration: Optional[int] = None
     web_url: Optional[str] = None
-    total_count: int = 0
+    test_counts: Optional[PipelineTestCounts] = None
+
+    def __post_init__(self):
+        if self.test_counts is None:
+            object.__setattr__(self, 'test_counts', PipelineTestCounts())
+
+    @property
+    def total_count(self) -> int:
+        """Return total test count."""
+        return self.test_counts.total_count if self.test_counts else 0
+
+    @property
+    def success_count(self) -> int:
+        """Return success test count."""
+        return self.test_counts.success_count if self.test_counts else 0
+
+    @property
+    def failed_count(self) -> int:
+        """Return failed test count."""
+        return self.test_counts.failed_count if self.test_counts else 0
+
+    @property
+    def skipped_count(self) -> int:
+        """Return skipped test count."""
+        return self.test_counts.skipped_count if self.test_counts else 0
 
 
 def parse_pipeline_info(pipeline: dict) -> PipelineInfo:
@@ -134,3 +168,31 @@ def parse_pipelines(pipelines: List[dict]) -> List[PipelineHistory]:
         )
         for p in pipelines
     ]
+
+
+def add_test_summary_to_pipeline(
+    pipeline: PipelineHistory, test_summary: TestSummary
+) -> PipelineHistory:
+    """Create a new PipelineHistory with test summary data.
+
+    Args:
+        pipeline: Existing PipelineHistory object
+        test_summary: TestSummary with test counts
+
+    Returns:
+        New PipelineHistory instance with test counts added
+    """
+    return PipelineHistory(
+        id=pipeline.id,
+        status=pipeline.status,
+        ref=pipeline.ref,
+        created_at=pipeline.created_at,
+        duration=pipeline.duration,
+        web_url=pipeline.web_url,
+        test_counts=PipelineTestCounts(
+            total_count=test_summary.total_count,
+            success_count=test_summary.success_count,
+            failed_count=test_summary.failed_count,
+            skipped_count=test_summary.skipped_count,
+        ),
+    )

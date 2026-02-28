@@ -24,6 +24,7 @@ from models import (
     PipelineHistory,
     PipelineInfo,
     TestSummary,
+    add_test_summary_to_pipeline,
     parse_pipeline_info,
     parse_pipelines,
     parse_test_summary,
@@ -222,6 +223,22 @@ Examples:
         args.project_id, per_page=history_count
     )
     recent_pipelines: list[PipelineHistory] = parse_pipelines(pipelines_data)
+
+    print("Fetching test counts for historical pipelines...")
+    enriched_pipelines = []
+    for pipeline in recent_pipelines:
+        try:
+            test_report = gitlab.get_pipeline_test_report_summary(
+                args.project_id, pipeline.id
+            )
+            test_summary = parse_test_summary(test_report)
+            enriched_pipelines.append(
+                add_test_summary_to_pipeline(pipeline, test_summary)
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            print(f"Warning: Could not fetch test summary for pipeline {pipeline.id}: {exc}")
+            enriched_pipelines.append(pipeline)
+    recent_pipelines = enriched_pipelines
 
     section_content = generate_pipeline_section(
         pipeline_name, pipeline_info, test_summary, recent_pipelines
