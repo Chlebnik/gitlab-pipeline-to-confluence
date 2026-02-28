@@ -54,7 +54,7 @@ def generate_ascii_bar_chart(
         status = d.status
         val = get_value(d)
         bar_length = int((val / max_val) * 20)
-        bar_str = "█" * bar_length
+        bar_str = "█" * bar_length + " " * (20 - bar_length)
         status_icon = "✓" if status == "success" else "✗" if status == "failed" else "○"
         lines.append(f"{status_icon} {status:10} |{bar_str}| {val}")
 
