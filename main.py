@@ -165,6 +165,14 @@ Examples:
     if args.config:
         try:
             file_config = config.load_config_file(args.config)
+            config.validate_config_keys(
+                file_config,
+                {
+                    "gitlab": ["url", "token"],
+                    "confluence": ["url", "email", "token"],
+                    "options": ["history_count"],
+                },
+            )
         except FileNotFoundError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)

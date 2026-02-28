@@ -11,6 +11,7 @@ then with config file (if provided), and finally with command line arguments.
 """
 
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -47,6 +48,33 @@ def load_config_file(config_path: Optional[str]) -> dict[str, Any]:
         return yaml.safe_load(file) or {}
 
 
+def validate_config_keys(config: dict[str, Any], expected_keys: dict[str, list[str]]) -> None:
+    """Log warnings for unknown keys in config file.
+
+    Args:
+        config: Loaded configuration dictionary
+        expected_keys: Dict mapping section names to expected keys
+                     e.g. {"gitlab": ["url", "token"], "confluence": ["url", "email", "token"]}
+    """
+    for section, keys in expected_keys.items():
+        if section not in config:
+            continue
+
+        section_config = config[section]
+        if not isinstance(section_config, dict):
+            continue
+
+        provided_keys = set(section_config.keys())
+        expected = set(keys)
+        unknown = provided_keys - expected
+
+        if unknown:
+            warnings.warn(
+                f"Unknown key(s) in config '{section}': {sorted(unknown)}. "
+                f"Expected: {sorted(expected)}. This may be a typo."
+            )
+
+
 def get_config_value(
     config: dict[str, Any],
     env_key: str,
@@ -54,6 +82,11 @@ def get_config_value(
     nested_keys: list[str],
 ) -> Any:
     """Get a configuration value with priority: config file > env var > default.
+
+    Priority order (highest to lowest):
+        1. Config file
+        2. Environment variable
+        3. Default value
 
     Args:
         config: Configuration dictionary loaded from YAML file
@@ -64,19 +97,19 @@ def get_config_value(
     Returns:
         The configuration value with highest priority
     """
-    value = os.getenv(env_key)
-    if value is not None:
-        return value
-
     nested_config = config
     for key in nested_keys:
         if isinstance(nested_config, dict):
             nested_config = nested_config.get(key)
         else:
-            return default
+            break
 
     if nested_config is not None:
         return nested_config
+
+    value = os.getenv(env_key)
+    if value is not None:
+        return value
 
     return default
 

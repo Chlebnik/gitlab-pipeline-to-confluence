@@ -86,14 +86,43 @@ class TestGetConfigValue:
 
             assert result == "default_value"
 
-    def test_get_config_value_env_overrides_file(self):
-        """Test that env var overrides config file."""
+    def test_get_config_value_file_overrides_env(self):
+        """Test that config file overrides environment variable.
+
+        Priority: config file > env var > default
+        """
         with patch.dict(os.environ, {"TEST_VAR": "env_value"}):
             file_config = {"nested": {"key": "file_value"}}
 
             result = config.get_config_value(file_config, "TEST_VAR", "default", ["nested", "key"])
 
-            assert result == "env_value"
+            assert result == "file_value"
+
+
+class TestConfigPriority:
+    """Tests for correct config priority order (config file > env var > default)."""
+
+    def test_config_file_overrides_env_var(self):
+        """Config file values should override environment variables."""
+        with patch.dict(os.environ, {"GITLAB_URL": "https://env.gitlab.com"}):
+            file_config = {"gitlab": {"url": "https://file.gitlab.com"}}
+            result = config.get_gitlab_url(file_config)
+
+            assert result == "https://file.gitlab.com"
+
+    def test_env_var_overrides_default(self):
+        """Environment variables should override defaults."""
+        with patch.dict(os.environ, {"GITLAB_URL": "https://env.gitlab.com"}):
+            result = config.get_gitlab_url({})
+
+            assert result == "https://env.gitlab.com"
+
+    def test_default_when_no_config_no_env(self):
+        """Default value when no config file and no env var."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = config.get_gitlab_url({})
+
+            assert result == config.DEFAULT_GITLAB_URL
 
 
 class TestGetGitlabUrl:
@@ -227,3 +256,53 @@ class TestGetConfluenceToken:
             result = config.get_confluence_token({})
 
             assert result == "conf_token"
+
+
+class TestValidateConfigKeys:
+    """Tests for validate_config_keys function."""
+
+    def test_validate_config_keys_no_warning_valid(self):
+        """No warning for valid keys."""
+        import warnings as warnings_module
+        with warnings_module.catch_warnings(record=True) as record:
+            warnings_module.simplefilter("always")
+            config.validate_config_keys(
+                {"gitlab": {"url": "https://gitlab.com", "token": "secret"}},
+                {"gitlab": ["url", "token"]},
+            )
+
+        assert len(record) == 0
+
+    def test_validate_config_keys_warns_unknown(self):
+        """Warning for unknown keys."""
+        with pytest.warns(UserWarning, match="Unknown key"):
+            config.validate_config_keys(
+                {"gitlab": {"url": "https://gitlab.com", "server_url": "wrong"}},
+                {"gitlab": ["url", "token"]},
+            )
+
+    def test_validate_config_keys_missing_section(self):
+        """No warning when section is missing."""
+        import warnings as warnings_module
+        with warnings_module.catch_warnings(record=True) as record:
+            warnings_module.simplefilter("always")
+            config.validate_config_keys(
+                {"other": {"url": "https://example.com"}},
+                {"gitlab": ["url", "token"]},
+            )
+
+        assert len(record) == 0
+
+    def test_validate_config_keys_multiple_unknown(self):
+        """Warning for multiple unknown keys."""
+        with pytest.warns(UserWarning, match="server_url.*typo"):
+            config.validate_config_keys(
+                {
+                    "gitlab": {
+                        "url": "https://gitlab.com",
+                        "server_url": "wrong1",
+                        "token_secret": "wrong2",
+                    }
+                },
+                {"gitlab": ["url", "token"]},
+            )
